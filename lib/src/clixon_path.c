@@ -823,9 +823,10 @@ api_path2xpath_cvv(cvec       *api_path,
  * @retval     0         Invalid api_path or associated XML, netconf called
  * @retval    -1         Fatal error, clicon_err called
  * @code
- *   char *xpath = NULL;
- *   cvec *nsc = NULL;
- *   if ((ret = api_path2xpath("/module:a/b", yspec, &xpath, &nsc)) < 0)
+ *   char  *xpath = NULL;
+ *   cvec  *nsc = NULL;
+ *   cxobj *xerr = NULL;
+ *   if ((ret = api_path2xpath("/module:a/b", yspec, &xpath, &nsc, &xerr)) < 0)
  *      err;
  *   if (ret == 1)
  *      ... access xpath as cbuf_get(xpath) 
@@ -892,6 +893,7 @@ api_path2xpath(char       *api_path,
  * @param[in]   x0        Xpath tree so far
  * @param[in]   y0        Yang spec for x0
  * @param[in]   nodeclass Set to schema nodes, data nodes, etc
+ * @param[in]   strict    Break if api-path is not "complete" otherwise ignore and continue
  * @param[out]  xbotp     Resulting xml tree 
  * @param[out]  ybotp    Yang spec matching xpathp
  * @param[out]  xerr      Netconf error message (if retval=0)
@@ -1015,10 +1017,6 @@ api_path2xml_vec(char      **vec,
 	break;
     case Y_LIST:
 	cvk = yang_cvec_get(y); /* Use Y_LIST cache, see ys_populate_list() */
-	if (valvec){ /* loop, valvec may have been used before */
-	    free(valvec);
-	    valvec = NULL;
-	}
 	if (restval==NULL){
 	    if (strict){
 		cprintf(cberr, "malformed key =%s, expected '=restval'", nodeid);
@@ -1107,7 +1105,7 @@ api_path2xml_vec(char      **vec,
     }
     if ((retval = api_path2xml_vec(vec+1, nvec-1, 
 				   x, y, 
-				   nodeclass, strict,
+				   nodeclass, strict, 
 				   xbotp, ybotp, xerr)) < 1)
 	goto done;
  ok:
@@ -1138,6 +1136,7 @@ api_path2xml_vec(char      **vec,
  * @param[in]     yspec      Yang spec
  * @param[in,out] xtop       Incoming XML tree
  * @param[in]     nodeclass  Set to schema nodes, data nodes, etc
+ * @param[in]     strict     Break if api-path is not "complete" otherwise ignore and continue
  * @param[out]    xbotp      Resulting xml tree (end of xpath)
  * @param[out]    ybotp      Yang spec matching xbotp
  * @param[out]    xerr       Netconf error message (if retval=0)
@@ -1159,6 +1158,7 @@ api_path2xml_vec(char      **vec,
  * @endcode
  * @note "api-path" is "URI-encoded path expression" definition in RFC8040 3.5.3
  * @see api_path2xpath   For api-path to xpath translation (maybe could be combined?)
+ * @note "Collections" should use strict = 0
  */
 int
 api_path2xml(char       *api_path,
