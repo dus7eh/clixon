@@ -74,6 +74,11 @@ Users may have to change how they access the system
 * Added linenumbers to all YANG symbols for better debug and errors
   * Improved error messages for YANG identityref:s and leafref:s by adding original line numbers
 
+### Minor features
+
+* ietf-yang-metadata RFC 7952 support, placeholder parsing and extension
+  * No actual json/xml semantics
+
 ### Corrected Bugs
 
 * Fixed: [JSON leaf-list output single element leaf-list does not use array](https://github.com/clicon/clixon/issues/261)
