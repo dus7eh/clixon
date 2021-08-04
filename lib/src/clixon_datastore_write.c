@@ -268,6 +268,137 @@ check_when_condition(cxobj              *x0p,
     goto done;
 }
 
+#ifdef CREATE_LEAF_IF_LEAFREF_KEY
+/*! Given a list key of type leafref that does not exist, create its origin
+ * @see api_path2xml
+ * @note hardcode only to paths ../ , config true, and non-leafref/idref/union
+ * XXX: for paths not covered, see eg 
+ *  - macsec/openconfig-macsec.yang:206:        path "/macsec/mka/key-chains/key-chain/name";
+ *  - multicast/openconfig-pim.yang:411:        path "/oc-acl:acl/oc-acl:acl-sets/oc-acl:acl-set/" +
+ *  - acl/openconfig-acl.yang:617:        path "../../../../../../acl-sets/acl-set[name=current()/../set-name]" +
+ * XXX: prefixes are not properly handled, see absolute paths: multicast/openconfig-igmp.yang:294:
+ * XXX: This is experimental
+ */
+static int
+leafref_path_create(cxobj     *x0,
+		    yang_stmt *y0,
+		    yang_stmt *yrestype,
+		    char      *value)
+{
+    int        retval = -1;
+    yang_stmt *ypath;
+    char      *xpath;
+    char     **vec = NULL;
+    int        nvec;
+    cxobj    **xvec = NULL;
+    size_t     xlen;
+    char      *nodeid;
+    cxobj     *x;
+    cxobj     *x1;
+    cxobj     *xb;
+    cvec      *nsc = NULL;
+    int        i;
+    yang_stmt *y;
+    int        ret;
+    char      *name = NULL;
+    char      *prefix = NULL;
+    yang_stmt *yrestype1 = NULL; 
+    char      *restype1;         /* resolved type of final leaf */
+
+    if ((ypath = yang_find(yrestype, Y_PATH, NULL)) == NULL)
+	goto ok;
+    if ((xpath = yang_argument_get(ypath)) == NULL)
+	goto ok;
+    if (xpath_vec(x0, NULL, "%s", &xvec, &xlen, xpath) < 0) 
+	goto done;
+    if (xlen != 0)
+	goto ok;
+    if ((ret = yang_key_match(yang_parent_get(y0), yang_argument_get(y0))) < 0)
+	goto done;
+    if (ret != 1) /* create only if ys is a list key */
+	goto done;
+    /* separate the xpath into words separated by "/" */
+    if ((vec = clicon_strsep(xpath, "/", &nvec)) == NULL)
+	goto done;
+    if (nvec < 1)
+	goto ok;
+    x = x0;
+    y = y0;
+    for (i=0; i<nvec; i++){
+	if ((nodeid = vec[i]) == NULL)
+	    break;
+	/* Split into prefix and localname, reuse prefix/name */
+	if (prefix){
+	    free(prefix);
+	    prefix = NULL;
+	}
+	if (name){
+	    free(name);
+	    name = NULL;
+	}
+	/* XXX prefix is ignored */
+	if (nodeid_split(nodeid, &prefix, &name) < 0) 
+	    goto done;
+	if ((x1 = xpath_first(x, nsc, "%s", name)) != NULL){
+	    x = x1;
+	    y = xml_spec(x);
+	    continue;
+	}
+	if (strcmp(name, "..") == 0) /* If parent does not exist quit */
+	    break;
+	/* Create */
+	if ((y = yang_find_schemanode(y, name)) == NULL)
+	    break;
+	if (!yang_config(y)) 
+	    break;
+	switch (yang_keyword_get(y)){
+	case Y_LEAF:
+	    if (i != nvec-1) /* leaf only as terminator */
+		goto ok;
+	case Y_CONTAINER:
+	    if ((x = xml_new(yang_argument_get(y), x, CX_ELMNT)) == NULL)
+		goto done;
+	    xml_spec_set(x, y);
+	    if (yang_keyword_get(y) == Y_CONTAINER)
+		break;
+	    /* Y_LEAF: continues */
+	    /* Get type */
+	    if (yang_type_get(y, NULL, &yrestype1,
+			      NULL, NULL, NULL, NULL, NULL) < 0)
+		goto done;
+	    if ((restype1 = yang_argument_get(yrestype1)) != NULL){
+		/* Skip complexity by skipping union and identityref or leafref */
+		if (strcmp(restype1, "union") == 0 ||
+		    strcmp(restype1, "identityref") == 0 ||
+		    strcmp(restype1, "leafref") == 0){
+		    goto ok;
+		}
+	    }
+	    if ((xb = xml_new("body", x, CX_BODY)) == NULL)
+		goto done; 
+	    if (xml_value_set(xb, value) < 0)
+		goto done;
+	    break;
+	default: /* LIST, LEAF_LIST */
+	    goto ok;
+	    break;
+	}
+    } /* for */
+ ok:
+    retval = 0;
+ done:
+    if (prefix)
+	free(prefix);
+    if (name)
+	free(name);
+    if (xvec)
+	free(xvec);
+    if (vec)
+	free(vec);
+    return retval;
+}
+#endif
+
 /*! Modify a base tree x0 with x1 with yang spec y according to operation op
  * @param[in]  h        Clicon handle
  * @param[in]  x0       Base xml tree (can be NULL in add scenarios)
@@ -326,12 +457,13 @@ text_modify(clicon_handle       h,
     cvec      *nscx1 = NULL;
     char      *createstr = NULL;	
     yang_stmt *yrestype = NULL;
-    char      *restype;
+    char      *restype = NULL;
     
     if (x1 == NULL){
 	clicon_err(OE_XML, EINVAL, "x1 is missing");
 	goto done;
     }
+    /* Check yang when condition between a new xml x1 and old x0 */
     if ((ret = check_when_condition(x0p, x1, y0, cbret)) < 0)
 	goto done;
     if (ret == 0)
@@ -475,7 +607,7 @@ text_modify(clicon_handle       h,
 	    }
 	    restype = yang_argument_get(yrestype);
 	    /* Differentiate between an empty type (NULL) and an empty string "" */
-	    if (x1bstr==NULL && strcmp(restype,"string")==0)
+	    if (x1bstr==NULL && strcmp(restype, "string")==0)
 		x1bstr="";
 	    if (x1bstr){
 		if (strcmp(restype, "identityref") == 0){
@@ -525,6 +657,12 @@ text_modify(clicon_handle       h,
 		if (xml_insert(x0p, x0, insert, valstr, NULL) < 0) 
 		    goto done;
 	    }
+#ifdef CREATE_LEAF_IF_LEAFREF_KEY /* XXX Difficult maybe easier in validate? */
+	    if (restype && strcmp(restype, "leafref") == 0){
+		if (leafref_path_create(x0, y0, yrestype, x1bstr) < 0)
+		    goto done;
+	    }
+#endif
 	    break;
 	case OP_DELETE:
 	    if (x0==NULL){
