@@ -268,7 +268,6 @@ check_when_condition(cxobj              *x0p,
     goto done;
 }
 
-#ifdef CREATE_LEAF_IF_LEAFREF_KEY
 /*! Given a list key of type leafref that does not exist, create its origin
  * @see api_path2xml
  * @note hardcode only to paths ../ , config true, and non-leafref/idref/union
@@ -316,7 +315,7 @@ leafref_path_create(cxobj     *x0,
     if ((ret = yang_key_match(yang_parent_get(y0), yang_argument_get(y0))) < 0)
 	goto done;
     if (ret != 1) /* create only if ys is a list key */
-	goto done;
+	goto ok;
     /* separate the xpath into words separated by "/" */
     if ((vec = clicon_strsep(xpath, "/", &nvec)) == NULL)
 	goto done;
@@ -367,9 +366,8 @@ leafref_path_create(cxobj     *x0,
 			      NULL, NULL, NULL, NULL, NULL) < 0)
 		goto done;
 	    if ((restype1 = yang_argument_get(yrestype1)) != NULL){
-		/* Skip complexity by skipping union and identityref or leafref */
-		if (strcmp(restype1, "union") == 0 ||
-		    strcmp(restype1, "identityref") == 0 ||
+		/* Skip complexity by skipping (transitive) identityref or leafref */
+		if (strcmp(restype1, "identityref") == 0 ||
 		    strcmp(restype1, "leafref") == 0){
 		    goto ok;
 		}
@@ -397,7 +395,6 @@ leafref_path_create(cxobj     *x0,
 	free(vec);
     return retval;
 }
-#endif
 
 /*! Modify a base tree x0 with x1 with yang spec y according to operation op
  * @param[in]  h        Clicon handle
@@ -657,12 +654,11 @@ text_modify(clicon_handle       h,
 		if (xml_insert(x0p, x0, insert, valstr, NULL) < 0) 
 		    goto done;
 	    }
-#ifdef CREATE_LEAF_IF_LEAFREF_KEY /* XXX Difficult maybe easier in validate? */
-	    if (restype && strcmp(restype, "leafref") == 0){
-		if (leafref_path_create(x0, y0, yrestype, x1bstr) < 0)
-		    goto done;
-	    }
-#endif
+	    if (clicon_option_bool(h, "CLICON_XMLDB_LEAFREF_AUTOCREATE") &&
+		restype && strcmp(restype, "leafref") == 0){
+		    if (leafref_path_create(x0, y0, yrestype, x1bstr) < 0)
+			goto done;
+		}
 	    break;
 	case OP_DELETE:
 	    if (x0==NULL){
@@ -875,9 +871,20 @@ text_modify(clicon_handle       h,
 	    x1c = NULL;
 	    i = 0;
 	    while ((x1c = xml_child_each(x1, x1c, CX_ELMNT)) != NULL) {
-		x0c = x0vec[i++];
 		x1cname = xml_name(x1c);
 		yc = yang_find_datanode(y0, x1cname);
+		x0c = x0vec[i++];
+#if 0
+		/* XXX Need to recompute/doublecheck x0vec since CLICON_XMLDB_LEAFREF_AUTOCREATE
+		 * may have created the node automatically
+		 */
+		if (x0c == NULL){
+		    if (match_base_child(x0, x1c, yc, &x0c) < 0)
+			goto done;
+		    if (x0c && (yc != xml_spec(x0c)))
+			x0c = NULL;
+		}
+#endif
 		if ((ret = text_modify(h, x0c, x0, x0t, x1c, x1t,
 				       yc, op,
 				       username, xnacm, permit, cbret)) < 0)

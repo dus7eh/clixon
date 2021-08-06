@@ -117,20 +117,3 @@
  * Remove this when regression test
  */
 #undef YANG_PATCH
-
-/*! if leafref keys point to empty leafs, create those leafs automatically
- * The following construct is common in openconfig, see eg neighbor-address in
- * openconfig-bgp-neighbor.yang:
- *    list neighbor {
- *      key "neighbor-address";
- *      leaf neighbor-address {
- *        type leafref {
- *          path "../config/neighbor-address";
- *        }
- *      container config {
- *        leaf neighbor-address; <<--- Create this if it does not exist
- *      }
- *    }
- * This patch creates the leaf if it does not exist (eg config/neighbor-address above)
- */
-#define CREATE_LEAF_IF_LEAFREF_KEY

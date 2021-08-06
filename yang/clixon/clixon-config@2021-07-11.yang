@@ -887,6 +887,26 @@ module clixon-config {
                  Will fail startup if old yang not found or if old config does not match.
                  If not set, no yang check of old config is made until it is upgraded to new yang.";
 	}
+	leaf CLICON_XMLDB_LEAFREF_AUTOCREATE {
+	    type boolean;
+	    default true;
+	    description
+		"If leafref keys point to empty leafs, create those leafs automatically
+                 The following construct is common in openconfig, see eg neighbor-address in
+                    openconfig-bgp-neighbor.yang:
+                       list neighbor {
+                       key 'neighbor-address';
+                       leaf neighbor-address {
+                          type leafref {
+                          path '../config/neighbor-address';
+                       }
+                       container config {
+                          leaf neighbor-address; <<--- Create this if it does not exist
+                       }
+                    }
+                 This patch creates the leaf if it does not exist (eg config/neighbor-address above)
+                 @see https://datatracker.ietf.org/doc/html/draft-openconfig-netmod-opstate-01";
+	}
 	leaf CLICON_XML_CHANGELOG {
 	    type boolean;
 	    default false;
