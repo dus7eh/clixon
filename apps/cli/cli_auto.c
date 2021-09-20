@@ -452,7 +452,7 @@ cli_auto_edit(clicon_handle h,
     char         *treename;
     pt_head      *ph;  
     cg_obj       *co;
-    cg_obj       *coorig;
+    cg_obj       *coorig = NULL;
     cvec         *cvv2 = NULL; /* cvv2 = cvv0 + cvv1 */
 
     if (cvec_len(argv) != 2){
@@ -536,9 +536,15 @@ cli_auto_up(clicon_handle h,
     if ((co0 = cligen_ph_workpoint_get(ph)) == NULL)
 	goto ok;
     co1 = co_up(co0);
+#if 1
+    /* Find parent that has empty child */
+    while (co1 && !co_terminal(co1))
+	co1 = co_up(co1);
+#else
     /* Find parent that has a callback */
     while (co1 && (co1->co_callbacks == NULL))
 	co1 = co_up(co1);
+#endif
     cligen_ph_workpoint_set(ph, co1);
     if (co1 == NULL){
 	clicon_data_set(h, "cli-edit-mode", "");

@@ -125,6 +125,7 @@ cli_handle_exit(clicon_handle h)
     clicon_handle_exit(h); /* frees h and options */
     
     cligen_exit(ch);
+    clicon_debug(1, "%s co objects: %lu\n", __FUNCTION__, co_count_get());
 
     return 0;
 }

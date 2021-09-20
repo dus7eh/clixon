@@ -255,7 +255,6 @@ cli_interactive(clicon_handle h)
  * This tree is referenced from the main CLI spec (CLICON_CLISPEC_DIR) using the "tree reference"
  * syntax, ie @datamodel
  * @param[in]  h        Clixon handle
- * @param[in]  state     Set to include state syntax
  * @param[in]  printgen Print CLI syntax generated from dbspec
  * @param[in]  show_tree Is tree for show cli command
  * @retval     0        OK
@@ -266,7 +265,9 @@ cli_interactive(clicon_handle h)
 static int
 autocli_tree(clicon_handle      h,
 	     char              *name,
+#if 1
 	     int                state,
+#endif
 	     int                printgen,
 	     int                show_tree)
 {
@@ -299,7 +300,6 @@ autocli_tree(clicon_handle      h,
  * (as a separate mode)
  * This tree is referenced from the main CLI spec (CLICON_CLISPEC_DIR) using the "tree reference"
  * syntax, ie @datamodel
- * Also (if enabled) generate a second "state" tree called @datamodelstate
  *
  * @param[in]  h        Clixon handle
  * @param[in]  printgen Print CLI syntax generated from dbspec
@@ -317,6 +317,10 @@ autocli_start(clicon_handle h,
     /* If autocli disabled quit */
     if ((autocli_model = clicon_cli_genmodel(h)) == 0)
 	goto ok;
+    /* Init yangcli */
+    if (yang2cli_init(h) < 0)
+	goto done;
+
     /* Get the autocli type, ie HOW the cli is generated (could be much more here) */
     /* Create show_treename cbuf */
     if ((show_treename = cbuf_new()) == NULL){
@@ -333,20 +337,20 @@ autocli_start(clicon_handle h,
     if (autocli_tree(h, cbuf_get(treename), 0, printgen, 0) < 0)
 	goto done;
 
+#if 0
     /* The tree name is by default @datamodelshow but can be changed by option (why would one do that?) */
     cprintf(show_treename, "%s", clicon_cli_model_treename(h));
     cprintf(show_treename, "show");
     if (autocli_tree(h, cbuf_get(show_treename), 0, printgen, 1) < 0)
 	goto done;
-
     /* Create a tree for config+state. This tree's name has appended "state" to @datamodel
      */
     if (autocli_model > 1){
-	cprintf(treename, "state");
-	if (autocli_tree(h, cbuf_get(treename), 1, printgen, 1) < 0)
-	    goto done;
+       cprintf(treename, "state");
+       if (autocli_tree(h, cbuf_get(treename), 1, printgen, 1) < 0)
+           goto done;
     }
-
+#endif
  ok:
     retval = 0;
  done:
@@ -596,7 +600,6 @@ main(int    argc,
 	nr = clicon_option_int(h, "CLICON_CLI_LINES_DEFAULT");
 	cligen_terminal_rows_set(cli_cligen(h), nr);
     }
-    
     if (clicon_yang_regexp(h) == REGEXP_LIBXML2){
 #ifdef HAVE_LIBXML2
 	/* Enable XSD libxml2 regex engine */
